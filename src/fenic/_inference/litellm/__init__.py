@@ -1,0 +1,1 @@
+"""LiteLLM provider for Fenic - enabling local model support via Ollama."""

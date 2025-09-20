@@ -17,6 +17,7 @@ class ModelProvider(Enum):
     GOOGLE_VERTEX = "google-vertex"
     COHERE = "cohere"
     OPENROUTER = "openrouter"
+    LITELLM = "litellm"
 
 
 class TieredTokenCost:
@@ -238,6 +239,12 @@ GoogleDeveloperLanguageModelName = Literal[
 ]
 GoogleVertexLanguageModelName = GoogleDeveloperLanguageModelName
 
+LiteLLMLanguageModelName = Literal[
+    "qwen3:30b",
+    "gpt-oss",
+    "deepseek-r1",
+]
+
 
 class ProviderModelCollection:
     """A collection of models for a specific provider.
@@ -319,6 +326,7 @@ class ModelCatalog:
         self._initialize_google_gla_models()
         self._initialize_google_vertex_models()
         self._initialize_cohere_models()
+        self._initialize_litellm_models()
 
     def _initialize_anthropic_models(self):
         """Initialize Anthropic models in the catalog."""
@@ -958,6 +966,59 @@ class ModelCatalog:
                 input_token_cost=0.10 / 1_000_000,  # $0.10 per 1M tokens
                 allowed_output_dimensions=384,  # Fixed dimensions
                 max_input_size=512,
+            ),
+        )
+
+    def _initialize_litellm_models(self):
+        """Initialize LiteLLM models in the catalog for local model support via Ollama."""
+        # Qwen3 30B model via Ollama
+        self._add_model_to_catalog(
+            ModelProvider.LITELLM,
+            "qwen3:30b",
+            CompletionModelParameters(
+                input_token_cost=0.0,  # Local models are typically free
+                output_token_cost=0.0,
+                context_window_length=16384,  # 16k context window
+                max_output_tokens=4096,  # Reasonable max output for local models
+                max_temperature=1.0,
+                supports_profiles=False,  # Local models don't typically have profiles
+                supports_reasoning=False,
+                supports_custom_temperature=True,
+                supports_verbosity=False,
+            ),
+        )
+
+        # GPT-OSS model via Ollama
+        self._add_model_to_catalog(
+            ModelProvider.LITELLM,
+            "gpt-oss",
+            CompletionModelParameters(
+                input_token_cost=0.0,
+                output_token_cost=0.0,
+                context_window_length=16384,  # 16k context window
+                max_output_tokens=4096,
+                max_temperature=1.0,
+                supports_profiles=False,
+                supports_reasoning=False,
+                supports_custom_temperature=True,
+                supports_verbosity=False,
+            ),
+        )
+
+        # DeepSeek R1 model via Ollama
+        self._add_model_to_catalog(
+            ModelProvider.LITELLM,
+            "deepseek-r1",
+            CompletionModelParameters(
+                input_token_cost=0.0,
+                output_token_cost=0.0,
+                context_window_length=16384,  # 16k context window
+                max_output_tokens=4096,
+                max_temperature=1.0,
+                supports_profiles=False,
+                supports_reasoning=False,
+                supports_custom_temperature=True,
+                supports_verbosity=False,
             ),
         )
 

@@ -245,6 +245,13 @@ LiteLLMLanguageModelName = Literal[
     "deepseek-r1",
 ]
 
+LiteLLMEmbeddingModelName = Literal[
+    "nomic-embed-text",
+    "all-minilm:l6",
+    "bge-base-en-v1.5",
+    "embeddinggemma",
+]
+
 
 class ProviderModelCollection:
     """A collection of models for a specific provider.
@@ -1019,6 +1026,51 @@ class ModelCatalog:
                 supports_reasoning=False,
                 supports_custom_temperature=True,
                 supports_verbosity=False,
+            ),
+        )
+
+        # Add LiteLLM embedding models
+        # Nomic Embed Text - a popular embedding model available via Ollama
+        self._add_model_to_catalog(
+            ModelProvider.LITELLM,
+            "nomic-embed-text",
+            EmbeddingModelParameters(
+                input_token_cost=0.0,  # Local embedding models are free
+                allowed_output_dimensions=768,  # Fixed dimensions for nomic-embed-text
+                max_input_size=8192,  # Reasonable max input for local embedding models
+            ),
+        )
+
+        # All-MiniLM-L6-v2 - another common embedding model
+        self._add_model_to_catalog(
+            ModelProvider.LITELLM,
+            "all-minilm:l6",
+            EmbeddingModelParameters(
+                input_token_cost=0.0,
+                allowed_output_dimensions=384,  # Fixed dimensions for all-minilm-l6-v2
+                max_input_size=512,
+            ),
+        )
+
+        # BGE-base-en-v1.5 - a strong general-purpose embedding model
+        self._add_model_to_catalog(
+            ModelProvider.LITELLM,
+            "bge-base-en-v1.5",
+            EmbeddingModelParameters(
+                input_token_cost=0.0,
+                allowed_output_dimensions=768,
+                max_input_size=512,
+            ),
+        )
+
+        # EmbeddingGemma - Google's Gemma-based embedding model via Ollama
+        self._add_model_to_catalog(
+            ModelProvider.LITELLM,
+            "embeddinggemma",
+            EmbeddingModelParameters(
+                input_token_cost=0.0,
+                allowed_output_dimensions=768,  # Standard dimension for EmbeddingGemma
+                max_input_size=8192,
             ),
         )
 

@@ -27,6 +27,7 @@ from fenic.api.session.config import (
     GoogleDeveloperEmbeddingModel,
     GoogleDeveloperLanguageModel,
     LanguageModel,
+    LiteLLMEmbeddingModel,
     LiteLLMLanguageModel,
     OpenAILanguageModel,
     OpenRouterLanguageModel,
@@ -443,6 +444,13 @@ def configure_embedding_model(model_provider: ModelProvider, model_name: str) ->
     elif model_provider == ModelProvider.COHERE:
         embedding_model = CohereEmbeddingModel(
             model_name=model_name, rpm=3000, tpm=1_000_000
+        )
+    elif model_provider == ModelProvider.LITELLM:
+        embedding_model = LiteLLMEmbeddingModel(
+            model_name=model_name,
+            rpm=100,  # Lower rate limits for local models
+            tpm=10000,
+            api_base="http://localhost:11434",
         )
     else:
         raise ValueError(f"Unsupported embedding model provider: {model_provider}")

@@ -17,6 +17,7 @@ from fenic.core._inference.model_catalog import (
     GoogleDeveloperLanguageModelName,
     GoogleVertexEmbeddingModelName,
     GoogleVertexLanguageModelName,
+    LiteLLMEmbeddingModelName,
     LiteLLMLanguageModelName,
     ModelProvider,
     OpenAIEmbeddingModelName,
@@ -893,11 +894,50 @@ class CohereEmbeddingModel(BaseModel):
         input_type: CohereEmbeddingTaskType = Field(default="search_document", description="Type of input")
 
 
+class LiteLLMEmbeddingModel(BaseModel):
+    """Configuration for LiteLLM embedding models.
+
+    This class defines the configuration settings for LiteLLM embedding models,
+    which provide a unified interface to various local and remote embedding models
+    including Ollama, local OpenAI-compatible servers, and other providers.
+
+    Attributes:
+        model_name: The name of the LiteLLM embedding model to use.
+        rpm: Requests per minute limit; must be greater than 0.
+        tpm: Tokens per minute limit; must be greater than 0.
+        api_base: Base URL for the LiteLLM/Ollama server.
+
+    Example:
+        Configuring a LiteLLM embedding model with Ollama:
+
+        ```python
+        config = LiteLLMEmbeddingModel(
+            model_name="embeddinggemma",
+            rpm=100,
+            tpm=10000,
+            api_base="http://localhost:11434"
+        )
+        ```
+    """
+    model_name: LiteLLMEmbeddingModelName = Field(
+        ..., description="The name of the LiteLLM embedding model to use"
+    )
+    rpm: int = Field(..., gt=0, description="Requests per minute; must be > 0")
+    tpm: int = Field(..., gt=0, description="Tokens per minute; must be > 0")
+    api_base: str = Field(
+        default="http://localhost:11434",
+        description="Base URL for LiteLLM/Ollama server"
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+
 EmbeddingModel = Union[
     OpenAIEmbeddingModel,
     GoogleVertexEmbeddingModel,
     GoogleDeveloperEmbeddingModel,
     CohereEmbeddingModel,
+    LiteLLMEmbeddingModel,
 ]
 
 
@@ -1390,6 +1430,15 @@ class SessionConfig(BaseModel):
                     profiles=profiles,
                     default_profile=model.default_profile
                 )
+            elif isinstance(model, LiteLLMEmbeddingModel):
+                return ResolvedLiteLLMModelConfig(
+                    model_name=model.model_name,
+                    rpm=model.rpm,
+                    tpm=model.tpm,
+                    api_base=model.api_base,
+                    profiles=None,
+                    default_profile=None
+                )
             elif isinstance(model, OpenRouterLanguageModel):
                 profiles = (
                     {
@@ -1527,7 +1576,7 @@ def _get_model_provider_for_model_config(model_config: ModelConfig) -> ModelProv
         return ModelProvider.COHERE
     elif isinstance(model_config, OpenRouterLanguageModel):
         return ModelProvider.OPENROUTER
-    elif isinstance(model_config, LiteLLMLanguageModel):
+    elif isinstance(model_config, (LiteLLMLanguageModel, LiteLLMEmbeddingModel)):
         return ModelProvider.LITELLM
     else:
         raise InternalError(f"Unknown model type: {type(model_config)}")

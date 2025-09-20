@@ -242,6 +242,16 @@ class SessionModelRegistry:
                     profile_configurations=model_config.profiles,
                     default_profile_name=model_config.default_profile
                 )
+            elif isinstance(model_config, ResolvedLiteLLMModelConfig):
+                from fenic._inference.litellm.litellm_batch_embeddings_client import (
+                    LiteLLMBatchEmbeddingsClient,
+                )
+                rate_limit_strategy = UnifiedTokenRateLimitStrategy(rpm=model_config.rpm, tpm=model_config.tpm)
+                client = LiteLLMBatchEmbeddingsClient(
+                    rate_limit_strategy=rate_limit_strategy,
+                    model=model_config.model_name,
+                    api_base=model_config.api_base,
+                )
             else:
                 raise ConfigurationError(f"Unsupported model configuration: {model_config}")
 

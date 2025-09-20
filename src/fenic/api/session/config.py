@@ -17,6 +17,7 @@ from fenic.core._inference.model_catalog import (
     GoogleDeveloperLanguageModelName,
     GoogleVertexEmbeddingModelName,
     GoogleVertexLanguageModelName,
+    LiteLLMLanguageModelName,
     ModelProvider,
     OpenAIEmbeddingModelName,
     OpenAILanguageModelName,
@@ -33,6 +34,8 @@ from fenic.core._resolved_session_config import (
     ResolvedGoogleModelConfig,
     ResolvedGoogleModelProfile,
     ResolvedLanguageModelConfig,
+    ResolvedLiteLLMModelConfig,
+    ResolvedLiteLLMModelProfile,
     ResolvedModelConfig,
     ResolvedOpenAIModelConfig,
     ResolvedOpenAIModelProfile,
@@ -896,12 +899,65 @@ EmbeddingModel = Union[
     GoogleDeveloperEmbeddingModel,
     CohereEmbeddingModel,
 ]
+
+
+class LiteLLMLanguageModel(BaseModel):
+    """Configuration for LiteLLM language models.
+
+    This class defines the configuration settings for LiteLLM language models,
+    which provide a unified interface to various local and remote language models
+    including Ollama, local OpenAI-compatible servers, and other providers.
+
+    Attributes:
+        model_name: The name of the LiteLLM model to use (e.g., "ollama/qwen3:30b").
+        rpm: Requests per minute limit; must be greater than 0.
+        tpm: Tokens per minute limit; must be greater than 0.
+        api_base: Optional base URL for the LiteLLM server (defaults to http://localhost:11434).
+
+    Example:
+        ```python
+        LiteLLMLanguageModel(
+            model_name="qwen3:30b",
+            rpm=100,
+            tpm=10000,
+            api_base="http://localhost:11434"
+        )
+        ```
+    """
+    model_name: LiteLLMLanguageModelName = Field(
+        ..., description="The name of the LiteLLM model to use"
+    )
+    rpm: int = Field(..., gt=0, description="Requests per minute; must be > 0")
+    tpm: int = Field(..., gt=0, description="Tokens per minute; must be > 0")
+    api_base: Optional[str] = Field(
+        default="http://localhost:11434",
+        description="Base URL for the LiteLLM/Ollama server"
+    )
+    profiles: Optional[dict[str, 'LiteLLMLanguageModel.Profile']] = Field(
+        default=None, description="Optional mapping of profile names to profile configurations"
+    )
+    default_profile: Optional[str] = Field(
+        default=None, description="Default profile name to use if none specified"
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    class Profile(BaseModel):
+        """Profile configurations for LiteLLM language models.
+
+        This class defines profile configurations for LiteLLM language models,
+        allowing different configurations to be applied to the same model.
+        """
+        model_config = ConfigDict(extra="forbid")
+
+
 LanguageModel = Union[
     OpenAILanguageModel,
     AnthropicLanguageModel,
     GoogleDeveloperLanguageModel,
     GoogleVertexLanguageModel,
     OpenRouterLanguageModel,
+    LiteLLMLanguageModel,
 ]
 ModelConfig = Union[EmbeddingModel, LanguageModel]
 
@@ -1360,6 +1416,19 @@ class SessionConfig(BaseModel):
                     profiles=profiles,
                     default_profile=model.default_profile,
                 )
+            elif isinstance(model, LiteLLMLanguageModel):
+                profiles = {
+                    profile_name: ResolvedLiteLLMModelProfile() for
+                    profile_name, profile in model.profiles.items()
+                } if model.profiles else None
+                return ResolvedLiteLLMModelConfig(
+                    model_name=model.model_name,
+                    rpm=model.rpm,
+                    tpm=model.tpm,
+                    api_base=model.api_base,
+                    profiles=profiles,
+                    default_profile=model.default_profile,
+                )
             else:
                 raise InternalError(f"Unknown model type: {type(model)}")
 
@@ -1458,5 +1527,7 @@ def _get_model_provider_for_model_config(model_config: ModelConfig) -> ModelProv
         return ModelProvider.COHERE
     elif isinstance(model_config, OpenRouterLanguageModel):
         return ModelProvider.OPENROUTER
+    elif isinstance(model_config, LiteLLMLanguageModel):
+        return ModelProvider.LITELLM
     else:
         raise InternalError(f"Unknown model type: {type(model_config)}")

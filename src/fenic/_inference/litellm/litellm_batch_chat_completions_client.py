@@ -93,8 +93,10 @@ class LiteLLMBatchChatCompletionsClient(
         """
         try:
             # Build the request parameters
+            # Add ollama/ prefix for LiteLLM routing if not already present
+            model_name = self.model if self.model.startswith("ollama/") else f"ollama/{self.model}"
             common_params = {
-                "model": self.model,
+                "model": model_name,
                 "messages": request.messages.to_message_list(),
                 "max_tokens": request.max_completion_tokens,
                 "api_base": self._api_base,
@@ -109,6 +111,7 @@ class LiteLLMBatchChatCompletionsClient(
                 common_params["format"] = "json"
 
                 # Add schema to the system message
+                import json
                 messages = common_params["messages"]
                 system_msg_content = messages[0]["content"]
                 schema_prompt = f"\n\nPlease respond with valid JSON that matches this schema:\n{json.dumps(request.structured_output.json_schema, indent=2)}"
@@ -122,18 +125,27 @@ class LiteLLMBatchChatCompletionsClient(
             # Make the API call
             response = await litellm.acompletion(**common_params)
 
-            # Extract the completion text
-            completion_text = response.choices[0].message.content if response.choices else ""
+            # Extract the completion text safely
+            completion_text = ""
+            if hasattr(response, 'choices') and response.choices and len(response.choices) > 0:
+                choice = response.choices[0]
+                if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
+                    completion_text = choice.message.content or ""
 
-            # Handle usage information
-            usage_info = response.usage if hasattr(response, 'usage') and response.usage else None
+            # Handle usage information more robustly
+            usage_info = getattr(response, 'usage', None)
             response_usage = None
 
             if usage_info:
+                # Extract token counts safely, defaulting to 0 if not available
+                prompt_tokens = getattr(usage_info, 'prompt_tokens', 0)
+                completion_tokens = getattr(usage_info, 'completion_tokens', 0)
+                total_tokens = getattr(usage_info, 'total_tokens', prompt_tokens + completion_tokens)
+
                 response_usage = ResponseUsage(
-                    prompt_tokens=getattr(usage_info, 'prompt_tokens', 0),
-                    completion_tokens=getattr(usage_info, 'completion_tokens', 0),
-                    total_tokens=getattr(usage_info, 'total_tokens', 0),
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    total_tokens=total_tokens,
                     cached_tokens=0,  # Local models don't typically have caching
                     thinking_tokens=0,  # Local models don't have separate thinking tokens
                 )
@@ -144,6 +156,24 @@ class LiteLLMBatchChatCompletionsClient(
                 self._metrics.num_requests += 1
                 # Local models are typically free, so cost is 0
                 self._metrics.cost += 0.0
+
+            # Create response, ensuring we have valid completion content
+            if not completion_text and request.structured_output:
+                # For structured output, try to extract any JSON from the response
+                completion_text = self._extract_json_from_response(response)
+
+            # Debug logging for structured output
+            if request.structured_output and completion_text:
+                logger.debug(f"LiteLLM structured response: {completion_text[:200]}...")
+                # Validate JSON format
+                try:
+                    import json
+                    json.loads(completion_text)
+                    logger.debug("JSON validation successful")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Invalid JSON from LiteLLM: {e}")
+                    # Try to clean up common JSON issues
+                    completion_text = self._clean_json_response(completion_text)
 
             return FenicCompletionsResponse(
                 completion=completion_text,
@@ -207,3 +237,66 @@ class LiteLLMBatchChatCompletionsClient(
     def _get_max_output_tokens(self, request: FenicCompletionsRequest) -> int:
         """Get the maximum output tokens for a request."""
         return request.max_completion_tokens
+
+    def _extract_json_from_response(self, response) -> str:
+        """Extract JSON content from LiteLLM response when standard extraction fails."""
+        try:
+            # Try to get content from various possible response structures
+            if hasattr(response, 'choices'):
+                for choice in response.choices:
+                    if hasattr(choice, 'message'):
+                        content = getattr(choice.message, 'content', None)
+                        if content:
+                            return content
+                    elif hasattr(choice, 'text'):
+                        return choice.text
+
+            # Try to get content directly from response
+            if hasattr(response, 'content'):
+                return response.content
+            elif hasattr(response, 'text'):
+                return response.text
+
+            # Last resort: convert response to string and look for JSON
+            response_str = str(response)
+            if '{' in response_str and '}' in response_str:
+                # Try to extract JSON-like content
+                start = response_str.find('{')
+                end = response_str.rfind('}') + 1
+                if start < end:
+                    return response_str[start:end]
+
+            return ""
+        except Exception as e:
+            logger.warning(f"Failed to extract content from LiteLLM response: {e}")
+            return ""
+
+    def _clean_json_response(self, response_text: str) -> str:
+        """Clean up common JSON formatting issues from local LLM responses."""
+        import re
+
+        # Remove markdown code blocks
+        response_text = re.sub(r'```json\s*', '', response_text)
+        response_text = re.sub(r'```\s*$', '', response_text)
+
+        # Remove any text before the first {
+        if '{' in response_text:
+            start = response_text.find('{')
+            response_text = response_text[start:]
+
+        # Remove any text after the last }
+        if '}' in response_text:
+            end = response_text.rfind('}') + 1
+            response_text = response_text[:end]
+
+        # Fix common JSON issues
+        response_text = response_text.strip()
+
+        # Try to validate and return
+        try:
+            import json
+            json.loads(response_text)
+            return response_text
+        except json.JSONDecodeError:
+            logger.warning(f"Could not clean JSON response: {response_text[:100]}...")
+            return response_text

@@ -24,6 +24,7 @@ from fenic.core._resolved_session_config import (
     ResolvedAnthropicModelConfig,
     ResolvedCohereModelConfig,
     ResolvedGoogleModelConfig,
+    ResolvedLiteLLMModelConfig,
     ResolvedModelConfig,
     ResolvedOpenAIModelConfig,
     ResolvedOpenRouterModelConfig,
@@ -319,6 +320,16 @@ class SessionModelRegistry:
                     rate_limit_strategy=rate_limit_strategy,
                     profiles=model_config.profiles,
                     default_profile_name=model_config.default_profile,
+                )
+            elif isinstance(model_config, ResolvedLiteLLMModelConfig):
+                from fenic._inference.litellm.litellm_batch_chat_completions_client import (
+                    LiteLLMBatchChatCompletionsClient,
+                )
+                rate_limit_strategy = UnifiedTokenRateLimitStrategy(rpm=model_config.rpm, tpm=model_config.tpm)
+                client = LiteLLMBatchChatCompletionsClient(
+                    model=model_config.model_name,  # Use model name as-is from catalog
+                    rate_limit_strategy=rate_limit_strategy,
+                    api_base=model_config.api_base,
                 )
             else:
                 raise ConfigurationError(f"Unsupported model configuration: {model_config}")

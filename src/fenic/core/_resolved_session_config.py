@@ -130,12 +130,30 @@ class ResolvedOpenRouterModelConfig:
     default_profile: Optional[str] = None
 
 
+@dataclass
+class ResolvedLiteLLMModelConfig:
+    model_name: str
+    rpm: int
+    tpm: int
+    api_base: str
+    model_provider: ModelProvider = ModelProvider.LITELLM
+    profiles: Optional[dict[str, 'ResolvedLiteLLMModelProfile']] = None
+    default_profile: Optional[str] = None
+
+
+@dataclass
+class ResolvedLiteLLMModelProfile:
+    """Profile configuration for LiteLLM models."""
+    pass
+
+
 ResolvedModelConfig = Union[
     ResolvedOpenAIModelConfig,
     ResolvedAnthropicModelConfig,
     ResolvedGoogleModelConfig,
     ResolvedCohereModelConfig,
     ResolvedOpenRouterModelConfig,
+    ResolvedLiteLLMModelConfig,
 ]
 
 

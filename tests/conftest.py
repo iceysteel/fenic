@@ -27,6 +27,7 @@ from fenic.api.session.config import (
     GoogleDeveloperEmbeddingModel,
     GoogleDeveloperLanguageModel,
     LanguageModel,
+    LiteLLMLanguageModel,
     OpenAILanguageModel,
     OpenRouterLanguageModel,
 )
@@ -231,6 +232,22 @@ def multi_model_local_session_config(tmp_path, app_name, request) -> SessionConf
                 model_name=request.config.getoption(LANGUAGE_MODEL_NAME_ARG),
             ),
         }
+    elif language_model_provider == ModelProvider.LITELLM:
+        # For LiteLLM testing, use two different models if available
+        language_models = {
+            "model_1": LiteLLMLanguageModel(
+                model_name="qwen3:30b",
+                rpm=50,
+                tpm=5000,
+                api_base="http://localhost:11434",
+            ),
+            "model_2": LiteLLMLanguageModel(
+                model_name=request.config.getoption(LANGUAGE_MODEL_NAME_ARG),
+                rpm=50,
+                tpm=5000,
+                api_base="http://localhost:11434",
+            ),
+        }
     else:
         raise ValueError(f"Unsupported language model provider: {language_model_provider}")
     return SessionConfig(
@@ -398,6 +415,13 @@ def configure_language_model(model_provider: ModelProvider, model_name: str) -> 
                 ),
             },
             default_profile="default",
+        )
+    elif model_provider == ModelProvider.LITELLM:
+        language_model = LiteLLMLanguageModel(
+            model_name=model_name,
+            rpm=100,  # Lower rate limits for local models
+            tpm=10000,
+            api_base="http://localhost:11434",
         )
     else:
         raise ValueError(f"Unsupported language model provider: {model_provider}")

@@ -110,7 +110,14 @@ class LiteLLMBatchEmbeddingsClient(ModelClient[FenicEmbeddingsRequest, list[floa
 
             # Extract the embedding vector
             if hasattr(response, 'data') and response.data and len(response.data) > 0:
-                embedding = response.data[0].embedding
+                data_item = response.data[0]
+                if hasattr(data_item, 'embedding'):
+                    embedding = data_item.embedding
+                elif isinstance(data_item, dict) and 'embedding' in data_item:
+                    embedding = data_item['embedding']
+                else:
+                    logger.error(f"Invalid embedding data structure: {data_item}")
+                    return FatalException(Exception(f"Invalid embedding data structure: {type(data_item)}"))
                 return embedding
             else:
                 logger.error(f"No embedding data in LiteLLM response: {response}")

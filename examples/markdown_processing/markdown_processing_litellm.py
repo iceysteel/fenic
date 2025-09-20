@@ -30,6 +30,14 @@ def create_local_llm_config() -> fc.SessionConfig:
     return fc.SessionConfig(
         app_name="markdown_processing_local",
         semantic=fc.SemanticConfig(
+            language_models={
+                "local_qwen": fc.LiteLLMLanguageModel(
+                    model_name="qwen3:30b",
+                    rpm=100,
+                    tpm=10000,
+                    api_base="http://localhost:11434"
+                )
+            },
             default_language_model="local_qwen"
         )
     )
@@ -148,7 +156,7 @@ def main():
     # Extract sections using markdown structure
     toc_df = df.select(
         fc.col("paper_title"),
-        fc.text.markdown.table_of_contents(fc.col("markdown")).alias("table_of_contents")
+        fc.markdown.generate_toc(fc.col("markdown")).alias("table_of_contents")
     )
 
     print("📑 Table of Contents:")
@@ -158,19 +166,17 @@ def main():
     print("\n🔍 Step 2: Section-by-Section Analysis with Local LLM")
     print("=" * 55)
 
-    # Extract sections as separate rows
+    # Extract sections as separate rows using header chunks
     sections_df = df.select(
         fc.col("paper_title"),
-        fc.explode(fc.text.markdown.sections(fc.col("markdown"))).alias("section")
-    ).select(
+        fc.markdown.extract_header_chunks(fc.col("markdown"), header_level=1).alias("sections")
+    ).explode("sections").select(
         fc.col("paper_title"),
-        fc.col("section.heading").alias("section_heading"),
-        fc.col("section.content").alias("section_content"),
-        fc.col("section.level").alias("heading_level")
+        fc.col("sections")
     )
 
     print("📊 Document Sections Extracted:")
-    sections_df.select("section_heading", "heading_level").show()
+    sections_df.show()
 
     # Step 3: Semantic analysis of each section with local LLM
     print("\n🤖 Step 3: Semantic Section Analysis (Local LLM)")
@@ -185,23 +191,22 @@ def main():
 
     print("🔬 Analyzing sections with local model...")
 
-    analyzed_sections = sections_df.filter(
-        fc.col("heading_level") <= 2  # Focus on main sections
+    analyzed_sections = sections_df.unnest("sections").filter(
+        fc.col("level") <= 2  # Focus on main sections
     ).select(
-        fc.col("section_heading"),
-        fc.col("section_content"),
+        fc.col("heading"),
+        fc.col("content"),
         fc.semantic.extract(
-            fc.col("section_content"),
+            fc.col("content"),
             SectionAnalysis,
-            max_output_tokens=300,
-            instruction="Analyze this academic paper section and extract key information."
+            max_output_tokens=300
         ).alias("analysis")
     ).unnest("analysis")
 
     print("✅ Section Analysis Complete!")
     print("\n📊 Section Analysis Results:")
     analyzed_sections.select(
-        "section_heading",
+        "heading",
         "main_concepts",
         "technical_complexity",
         "contribution_type"
@@ -212,14 +217,14 @@ def main():
     print("=" * 35)
 
     # Extract references section
-    references_df = sections_df.filter(
-        fc.col("section_heading").str.contains("References")
+    references_df = sections_df.unnest("sections").filter(
+        fc.col("heading").str.contains("References")
     ).select(
-        fc.col("section_content"),
+        fc.col("content"),
         # Count citations
-        fc.text.count_pattern(fc.col("section_content"), r"\\d+\\.").alias("citation_count"),
+        fc.text.count_pattern(fc.col("content"), r"\\d+\\.").alias("citation_count"),
         # Extract publication years using regex
-        fc.text.extract_pattern(fc.col("section_content"), r"\\b(19|20)\\d{2}\\b", "all").alias("years")
+        fc.text.extract_pattern(fc.col("content"), r"\\b(19|20)\\d{2}\\b", "all").alias("years")
     )
 
     print("📖 Reference Analysis:")
@@ -241,10 +246,9 @@ def main():
     document_assessment = df.select(
         fc.col("paper_title"),
         fc.semantic.extract(
-            fc.text.markdown.to_text(fc.col("markdown")),
+            fc.col("markdown").cast(fc.StringType),
             DocumentAssessment,
-            max_output_tokens=200,
-            instruction="Assess this academic paper's quality, innovation, and potential impact."
+            max_output_tokens=200
         ).alias("assessment")
     ).unnest("assessment")
 

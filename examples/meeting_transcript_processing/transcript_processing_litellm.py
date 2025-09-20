@@ -23,6 +23,14 @@ def create_local_llm_config() -> fc.SessionConfig:
     return fc.SessionConfig(
         app_name="meeting_transcript_processing_local",
         semantic=fc.SemanticConfig(
+            language_models={
+                "local_qwen": fc.LiteLLMLanguageModel(
+                    model_name="qwen3:30b",
+                    rpm=100,
+                    tpm=10000,
+                    api_base="http://localhost:11434"
+                )
+            },
             default_language_model="local_qwen"
         )
     )
@@ -225,25 +233,20 @@ def main():
         fc.col("meeting_id"),
         fc.col("meeting_type"),
         fc.col("transcript"),
-        # Extract action items
+        # Extract action items (using single ActionItem model)
         fc.semantic.extract(
             fc.col("transcript"),
-            List[ActionItem],
-            max_output_tokens=512,
-            instruction="Extract all action items mentioned in this meeting transcript."
+            ActionItem
         ).alias("action_items"),
         # Extract meeting insights
         fc.semantic.extract(
             fc.col("transcript"),
-            MeetingInsights,
-            max_output_tokens=512,
-            instruction="Analyze this meeting and extract key insights."
+            MeetingInsights
         ).alias("insights"),
         # Classify meeting priority/urgency
         fc.semantic.classify(
             fc.col("transcript"),
-            ["low", "medium", "high", "critical"],
-            instruction="Based on the content and decisions, classify the urgency level of this meeting."
+            ["low", "medium", "high", "critical"]
         ).alias("urgency_level")
     ).unnest("insights")
 
@@ -274,7 +277,11 @@ def main():
     action_items_df = enriched_df.select(
         fc.col("meeting_id"),
         fc.col("meeting_type"),
-        fc.explode("action_items").alias("action_item")
+        fc.col("action_items")
+    ).explode("action_items").select(
+        fc.col("meeting_id"),
+        fc.col("meeting_type"),
+        fc.col("action_items").alias("action_item")
     ).unnest("action_item")
 
     print("📝 Extracted Action Items:")

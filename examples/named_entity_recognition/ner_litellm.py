@@ -31,6 +31,14 @@ def create_local_llm_config() -> fc.SessionConfig:
     return fc.SessionConfig(
         app_name="ner_local",
         semantic=fc.SemanticConfig(
+            language_models={
+                "local_qwen": fc.LiteLLMLanguageModel(
+                    model_name="qwen3:30b",
+                    rpm=100,
+                    tpm=10000,
+                    api_base="http://localhost:11434"
+                )
+            },
             default_language_model="local_qwen"
         )
     )
@@ -115,9 +123,8 @@ def main():
         fc.col("text"),
         fc.semantic.extract(
             fc.col("text"),
-            List[NamedEntity],
-            max_output_tokens=512,
-            instruction="Extract all named entities from this text. Focus on people, organizations, locations, money amounts, and dates."
+            NamedEntity,
+            max_output_tokens=512
         ).alias("entities")
     )
 
@@ -161,8 +168,7 @@ def main():
         fc.semantic.extract(
             fc.col("text"),
             DocumentEntities,
-            max_output_tokens=300,
-            instruction="Analyze this document and summarize the most important entities and overall topic."
+            max_output_tokens=300
         ).alias("doc_summary")
     ).unnest("doc_summary")
 
@@ -193,9 +199,8 @@ def main():
         fc.col("title"),
         fc.semantic.extract(
             fc.col("text"),
-            List[EntityRelationship],
-            max_output_tokens=400,
-            instruction="Identify relationships between entities in this text (e.g., person works for organization, company located in city, etc.)."
+            EntityRelationship,
+            max_output_tokens=400
         ).alias("relationships")
     )
 

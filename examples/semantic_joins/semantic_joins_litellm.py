@@ -21,6 +21,14 @@ def create_local_llm_config() -> fc.SessionConfig:
     return fc.SessionConfig(
         app_name="semantic_joins_local",
         semantic=fc.SemanticConfig(
+            language_models={
+                "local_qwen": fc.LiteLLMLanguageModel(
+                    model_name="qwen3:30b",
+                    rpm=100,
+                    tpm=10000,
+                    api_base="http://localhost:11434"
+                )
+            },
             default_language_model="local_qwen"
         )
     )
@@ -124,8 +132,7 @@ def main():
     # Use semantic join to match users with articles based on their interests
     print("🤖 Running semantic join with local model (this may take a moment)...")
 
-    user_article_matches = fc.semantic.join(
-        users_df,
+    user_article_matches = users_df.semantic.join(
         articles_df,
         predicate=(
             "A person with interests '{{left_on}}' would be interested in reading about '{{right_on}}'"
@@ -230,8 +237,7 @@ def main():
     # Use semantic join for product recommendations
     print("🤖 Generating recommendations with local LLM...")
 
-    recommendations = fc.semantic.join(
-        purchases_df,
+    recommendations = purchases_df.semantic.join(
         products_df,
         predicate=(
             "A customer who bought '{{left_on}}' would also be interested in '{{right_on}}'"

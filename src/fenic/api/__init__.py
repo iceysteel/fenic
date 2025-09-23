@@ -57,6 +57,7 @@ from fenic.api.session import (
     GoogleDeveloperLanguageModel,
     GoogleVertexEmbeddingModel,
     GoogleVertexLanguageModel,
+    LiteLLMEmbeddingModel,
     LiteLLMLanguageModel,
     OpenAIEmbeddingModel,
     OpenAILanguageModel,
@@ -69,6 +70,7 @@ __all__ = [
     # Session
     "Session",
     "SessionConfig",
+    "LiteLLMEmbeddingModel",
     "LiteLLMLanguageModel",
     "OpenAILanguageModel",
     "OpenAIEmbeddingModel",

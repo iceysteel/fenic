@@ -241,6 +241,7 @@ GoogleVertexLanguageModelName = GoogleDeveloperLanguageModelName
 
 LiteLLMLanguageModelName = Literal[
     "qwen3:30b",
+    "qwen3:4b",
     "gpt-oss",
     "deepseek-r1",
 ]
@@ -987,6 +988,22 @@ class ModelCatalog:
                 output_token_cost=0.0,
                 context_window_length=16384,  # 16k context window
                 max_output_tokens=4096,  # Reasonable max output for local models
+                max_temperature=1.0,
+                supports_profiles=False,  # Local models don't typically have profiles
+                supports_reasoning=False,
+                supports_custom_temperature=True,
+                supports_verbosity=False,
+            ),
+        )
+        # Qwen3 4B model via Ollama - smaller, faster variant
+        self._add_model_to_catalog(
+            ModelProvider.LITELLM,
+            "qwen3:4b",
+            CompletionModelParameters(
+                input_token_cost=0.0,  # Local models are typically free
+                output_token_cost=0.0,
+                context_window_length=262144,  # 256k context window
+                max_output_tokens=32768,  # 32k max output
                 max_temperature=1.0,
                 supports_profiles=False,  # Local models don't typically have profiles
                 supports_reasoning=False,

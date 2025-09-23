@@ -5,11 +5,64 @@ transcript processing capabilities, including format detection, parsing, and sem
 extraction of structured information from unstructured meeting content.
 """
 
+import argparse
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
 import fenic as fc
+
+
+def create_session_config(language_model_provider: str, language_model_name: str,
+                         embedding_model_provider: Optional[str] = None,
+                         embedding_model_name: Optional[str] = None) -> fc.SessionConfig:
+    """Create session configuration based on provided model parameters."""
+
+    # Configure language models
+    if language_model_provider == "openai":
+        language_model = fc.OpenAILanguageModel(
+            model_name=language_model_name,
+            rpm=500,
+            tpm=200_000
+        )
+    elif language_model_provider == "litellm":
+        language_model = fc.LiteLLMLanguageModel(
+            model_name=language_model_name,
+            rpm=100,
+            tpm=10000,
+            api_base="http://localhost:11434"
+        )
+    else:
+        raise ValueError(f"Unsupported language model provider: {language_model_provider}")
+
+    # Configure embedding models if specified
+    embedding_models = None
+    if embedding_model_provider and embedding_model_name:
+        if embedding_model_provider == "openai":
+            embedding_model = fc.OpenAIEmbeddingModel(
+                model_name=embedding_model_name,
+                rpm=3000,
+                tpm=1_000_000
+            )
+        elif embedding_model_provider == "litellm":
+            embedding_model = fc.LiteLLMEmbeddingModel(
+                model_name=embedding_model_name,
+                rpm=100,
+                tpm=10000,
+                api_base="http://localhost:11434"
+            )
+        else:
+            raise ValueError(f"Unsupported embedding model provider: {embedding_model_provider}")
+
+        embedding_models = {"default": embedding_model}
+
+    return fc.SessionConfig(
+        app_name="meeting_transcript_processing",
+        semantic=fc.SemanticConfig(
+            language_models={"nano": language_model},
+            embedding_models=embedding_models
+        )
+    )
 
 # Data
 
@@ -115,17 +168,19 @@ Emma (00:02:35)
 # Create DataFrame with meeting transcripts
 
 
-def main(config: Optional[fc.SessionConfig] = None):
+def main(config: Optional[fc.SessionConfig] = None,
+         language_model_provider: str = "openai",
+         language_model_name: str = "gpt-4o-mini",
+         embedding_model_provider: Optional[str] = None,
+         embedding_model_name: Optional[str] = None):
     """Process meeting transcripts to extract insights using fenic's semantic operations."""
     # 1. Configure session with semantic capabilities
-    config = config or fc.SessionConfig(
-        app_name="meeting_transcript_processing",
-        semantic=fc.SemanticConfig(
-            language_models={
-                "nano" : fc.OpenAILanguageModel(
-                    model_name="gpt-4.1-nano",
-                    rpm=500,
-                    tpm=200_000,
+    config = config or create_session_config(
+        language_model_provider=language_model_provider,
+        language_model_name=language_model_name,
+        embedding_model_provider=embedding_model_provider,
+        embedding_model_name=embedding_model_name
+    )
                 )
             }
         ),
@@ -403,4 +458,26 @@ def main(config: Optional[fc.SessionConfig] = None):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Meeting Transcript Processing Example")
+    parser.add_argument("--language-model-provider", default="openai",
+                      choices=["openai", "litellm"],
+                      help="Language model provider (default: openai)")
+    parser.add_argument("--language-model-name", default="gpt-4o-mini",
+                      help="Language model name (default: gpt-4o-mini)")
+    parser.add_argument("--embedding-model-provider",
+                      choices=["openai", "litellm"],
+                      help="Embedding model provider (optional)")
+    parser.add_argument("--embedding-model-name",
+                      help="Embedding model name (optional)")
+
+    args = parser.parse_args()
+
+    # Note: Ensure you have set your API key:
+    # For OpenAI: export OPENAI_API_KEY="your-api-key-here"
+    # For LiteLLM: ensure Ollama is running at http://localhost:11434
+    main(
+        language_model_provider=args.language_model_provider,
+        language_model_name=args.language_model_name,
+        embedding_model_provider=args.embedding_model_provider,
+        embedding_model_name=args.embedding_model_name
+    )

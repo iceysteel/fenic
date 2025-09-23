@@ -105,6 +105,10 @@ class LiteLLMBatchChatCompletionsClient(
             if request.temperature is not None:
                 common_params["temperature"] = request.temperature
 
+            # Set thinking parameter to false for qwen3:4b model
+            if "qwen3" in self.model.lower():
+                common_params["think"] = False
+
             # Handle structured output using LiteLLM's JSON mode for local models
             if request.structured_output:
                 # Use LiteLLM's format parameter for local models
